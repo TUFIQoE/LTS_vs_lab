@@ -1,0 +1,75 @@
+---
+title: "plots_for_lts_IEEE_TOM"
+output: html_document
+date: '2023-08-09'
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(RColorBrewer)
+```
+
+
+## Heatmap for scores
+
+```{r scores, echo=FALSE}
+df <- read_csv("lab_and_lts.csv")
+df <- df %>%
+  filter(group == "lts")
+df <- df[!(df$external_id %in% c("61", "65", "42", "32", "41", "25", "20")), ]
+heatmap_data <- df %>%
+  group_by(external_id, q2) %>%
+  dplyr::summarize(Frequency = n())
+
+# Define color palette
+color_palette <- brewer.pal(6, "Blues")
+
+# Create the heatmap
+p <- ggplot(heatmap_data, aes(x = external_id, y = q2, fill = Frequency)) +
+  geom_tile() +
+  scale_fill_gradientn(colors = color_palette, trans = "log", 
+  breaks = seq(1, max(heatmap_data$Frequency), by = 4)) +
+  labs(
+    x = "User ID",
+    y = "Rating"
+  ) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust=0.5))
+ggsave(filename = "scores_distribution_lts.pdf", plot = p, width = 8, height = 6)
+print(p)
+
+```
+
+## The 'reliable user' plot
+
+```{r plot}
+library(RColorBrewer)
+df_s <- read_csv("lab_and_lts.csv")
+
+filtered_df <- df_s %>%
+  filter(group == "labNor")
+
+mean_scores <- filtered_df %>%
+  group_by(week)  %>%
+  dplyr::summarize(mean_score = mean(q2, na.rm = TRUE))
+
+df_with_mean <- filtered_df %>%
+  left_join(mean_scores, by = "week")
+
+
+mean_correlation_per_user <- df_with_mean %>%
+  group_by(external_id) %>%
+  dplyr::summarize(mean_correlation = cor(q2, mean_score, use = "complete.obs"))
+
+
+p <- ggplot(mean_correlation_per_user, aes(x = external_id, y = mean_correlation)) +
+  geom_point() +
+  labs(x = "User ID", y = "Correlation") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 0.5, vjust=0.5), aspect.ratio = 0.5) + ylim(-0.01, 1)
+ggsave(filename = "correlation_nor.pdf", plot = p, width = 8, height = 4)
+print(p)
+
+```
+

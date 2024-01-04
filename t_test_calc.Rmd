@@ -1,0 +1,79 @@
+---
+title: "ttests"
+author: "NC"
+date: '2023-10-18'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(ggpubr)
+library(ordinal)
+library(optimx)
+library(stats)
+library(data.table)
+library(xtable)
+
+```
+
+## R Markdown
+
+```{r cars}
+
+all_data <- read_csv("lab_and_lts.csv")
+all_data <- all_data[!(all_data$external_id %in% c("61", "65", "42", "32", "41", "25", "20")), ]
+conditions <- list(
+  lts = list( all_data$group == "lts"),
+  labAll = list(all_data$group != "lts"),
+  labPl = list(all_data$group == "labPl"),
+  labNor = list(all_data$group == "labNor")
+)
+
+
+t_tests <- data.frame(Condition = character(0), version = character(0), pValue = numeric(0), t = numeric(0))
+
+
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+for (condition_name in names(conditions)) {
+  condition <- conditions[[condition_name]]
+  data_by_weeks <- all_data %>% filter(!!!condition)
+  group255_data <- data_by_weeks$q2[data_by_weeks$week == 4]
+  group552_data <- data_by_weeks$q2[data_by_weeks$week == 3]
+
+  group244_data <- data_by_weeks$q2[data_by_weeks$week == 7]
+  group442_data <- data_by_weeks$q2[data_by_weeks$week == 6]
+
+  group225_data <- data_by_weeks$q2[data_by_weeks$week == 10]
+  group522_data <- data_by_weeks$q2[data_by_weeks$week == 9]
+
+  group224_data <- data_by_weeks$q2[data_by_weeks$week == 13]
+  group422_data <- data_by_weeks$q2[data_by_weeks$week == 12]
+
+  t_test_result_255_slow <- t.test(group255_data, group552_data)
+  t_test_result_244_slow <- t.test(group244_data, group442_data)
+  t_test_result_225_slow <- t.test(group225_data, group522_data)
+  t_test_result_224_slow <- t.test(group224_data, group422_data)
+  
+  t_tests <- rbind(t_tests, data.frame(Condition = condition_name, version = "255vs552", pValue = t_test_result_255_slow[["p.value"]], t = t_test_result_255_slow[["estimate"]][["mean of x"]] - t_test_result_255_slow[["estimate"]][["mean of y"]]))
+  t_tests <- rbind(t_tests, data.frame(Condition = condition_name, version = "244vs442", pValue = t_test_result_244_slow[["p.value"]], t = t_test_result_244_slow[["estimate"]][["mean of x"]] - t_test_result_244_slow[["estimate"]][["mean of y"]]))
+  t_tests <- rbind(t_tests, data.frame(Condition = condition_name, version = "225vs522",pValue = t_test_result_225_slow[["p.value"]], t = t_test_result_225_slow[["estimate"]][["mean of x"]] - t_test_result_225_slow[["estimate"]][["mean of y"]]))
+  t_tests <- rbind(t_tests, data.frame(Condition = condition_name, version = "224vs422",pValue = t_test_result_224_slow[["p.value"]], t = t_test_result_224_slow[["estimate"]][["mean of x"]] - t_test_result_224_slow[["estimate"]][["mean of y"]]))
+    
+
+}
+
+
+latex_table <- xtable(t_tests) 
+print(latex_table)
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

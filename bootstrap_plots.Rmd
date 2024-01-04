@@ -1,0 +1,224 @@
+---
+title: "different plots"
+author: "NC"
+date: '2023-10-07'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(ggpubr)
+library(ordinal)
+library(optimx)
+library(stats)
+library(data.table)
+```
+
+## R Markdown
+
+```{r cars}
+#load each file as seperate rds
+df_y <- data.frame(matrix(ncol = 4, nrow = 0))
+colnames(df_y) <- c('rep', 'step', 'weight', 'name')
+temp = list.files(pattern="*.rds")
+var = length(temp)
+for (d in 1:var) {
+  fname <- temp[d]
+   namey <- paste0("d_", fname) ## getting a new name ready
+   y <- readRDS(fname)
+   setDT(y)
+   y[, abs_dif := abs(weight - mean(weight)), by = step]
+   desired_length <- nrow(y) * 0.95
+   y$get_in <- 1
+   bootstrap_data_ra <- y[get_in == 1]
+   while (nrow(bootstrap_data_ra) > desired_length) {
+  # Filter by get_in, compute abs_dif and remove rows with max abs_dif rep
+      for (p in unique(bootstrap_data_ra$step)){
+        bootstrap_data_ra <- bootstrap_data_ra[get_in == 1]
+        bootstrap_data_ra[, abs_dif := abs(weight - mean(weight)), by = step]
+        bootstrap_data_tmp <- bootstrap_data_ra %>% filter(step == p)
+        reps_with_max_abs_dif <- bootstrap_data_tmp[abs_dif == max(abs_dif), unique(rep)]
+        bootstrap_data_ra[rep %in% reps_with_max_abs_dif, get_in := 0]
+        }
+      }
+
+   bootstrap_data_ra$name <- fname
+   assign(namey, bootstrap_data_ra)
+   df_y <- rbind(df_y, bootstrap_data_ra)
+   pd <- ggplot(bootstrap_data_ra, aes(x = step, y = weight, color = name)) + geom_point(alpha = 0.1)
+   print(pd)
+   
+   
+}
+
+df_lab_all <- df_y %>% filter(str_detect(name, "full")) %>% filter(str_detect(name, "All"))
+
+df_lab_Pl <-  df_y%>% filter(str_detect(name, "full")) %>% filter(str_detect(name, "Pl"))
+
+df_lab_Nor <-  df_y %>% filter(str_detect(name, "full")) %>% filter(str_detect(name, "Nor"))
+
+df_lts <- df_y %>% filter(str_detect(name, "full")) %>% filter(str_detect(name, "lts"))
+
+clean_lab_all <- df_y %>% filter(str_detect(name, "clean")) %>% filter(str_detect(name, "All"))
+
+clean_lab_Pl <-  df_y%>% filter(str_detect(name, "clean")) %>% filter(str_detect(name, "Pl"))
+
+clean_lab_Nor <-  df_y %>% filter(str_detect(name, "clean")) %>% filter(str_detect(name, "Nor"))
+
+clean_lts <- df_y %>% filter(str_detect(name, "clean")) %>% filter(str_detect(name, "lts"))
+
+```
+
+## Including Plots
+
+
+```{r pressure, fig.show='asis'}
+# List of data frames
+library(ggbeeswarm)
+
+df_full <- df_y %>% filter(str_detect(name, "full"))  %>% filter(!str_detect(name, "All"))
+df_clean <- df_y %>% filter(str_detect(name, "clean"))  %>% filter(!str_detect(name, "All"))
+df_list <- list(df_full, df_clean)
+
+
+# Names of data frames
+df_names <- c("df_full", "df_clean")
+
+for (i in seq_along(df_list)) {
+  # Create the ggplot plot for the current data frame
+  current_df <- df_list[[i]]
+  current_name <- df_names[i]
+  
+  #z <- ggplot(current_df, aes(x = step, y = weight, color = name)) + geom_point(alpha = 0.1) 
+
+  summarized_data <- current_df %>%
+    mutate(type = substr(name, nchar(name) - 6, nchar(name) - 4)) %>%
+    group_by(type, step) %>%
+    dplyr::summarise(mean_weight = mean(weight), sd_weight = sd(weight)) 
+
+
+summarized_data <- summarized_data %>%
+  mutate(step_adjusted = case_when(
+    grepl("Pl", type) ~ -0.03,
+    grepl("Nor", type) ~ 0,
+    TRUE ~ 0.03,))
+summarized_data$jittered <- summarized_data$step + summarized_data$step_adjusted
+  #summarized_data$jittered <- factor(summarized_data$jittered)
+summarized_data <- summarized_data %>%
+  mutate(day = case_when(
+    grepl("1.6", step) ~ "Monday",
+    grepl("0.3", step) ~ "Tuesday",
+    grepl("0.5", step) ~ "Wednesday",
+    grepl("0.6", step) ~ "Thursday",
+    grepl("0.8", step) ~ "Friday",
+    TRUE ~ "Saturday",
+    ))
+summarized_data$step <- as.numeric(summarized_data$step)
+# Add a small amount of jitter to the x-values
+# Define custom breaks and labels
+breaks <- c(0.1666, 0.3333, 0.5, 0.666, 0.833, 1.0)  # Custom break points
+labels <- c("1", "2", "3", "4", "5", "6")  # Labels for the breaks
+
+
+p <- ggplot(summarized_data, aes(x = jittered, y = mean_weight, color = type)) +
+  geom_point(alpha = 0.8) +
+  geom_errorbar(
+    aes(x = jittered,
+      ymin = mean_weight - sd_weight / sqrt(length(summarized_data)),
+      ymax = mean_weight + sd_weight / sqrt(length(summarized_data))
+    ) 
+  )  + theme(legend.position = "bottom") + scale_x_continuous(breaks = breaks, labels = labels) + labs(
+    x = "Video position in series",
+    y = "Mean weight",
+    color = "Condition"
+  ) + scale_color_manual(
+    values = c("lts" = "red", "bPl" = "green", "Nor" = "blue"),
+    labels = c("LTS", "Polish lab", "Norwegian lab")
+  ) + theme_bw() 
+ggsave(filename = "plot_days.pdf", plot = p, width = 8, height = 4)
+print(p)
+
+
+}
+
+
+
+```
+
+
+#here comparison of clean vs all
+```{r pressure, fig.show='asis'}
+# List of data frames
+df_cf_lts <- df_y %>% filter(str_detect(name, "lts")) 
+df_cf_all <- df_y %>% filter(str_detect(name, "All")) 
+df_cf_pl <- df_y %>% filter(str_detect(name, "Pl")) 
+df_cf_nor <- df_y %>% filter(str_detect(name, "Nor")) 
+df_list <- list(df_cf_lts, df_cf_all, df_cf_pl, df_cf_nor)
+
+# Names of data frames
+df_names <- c("df_cf_lts", "df_cf_all", "df_cf_pl", "df_cf_nor")
+
+for (i in seq_along(df_list)) {
+  # Create the ggplot plot for the current data frame
+  current_df <- df_list[[i]]
+  current_name <- df_names[i]
+  
+  #z <- ggplot(current_df, aes(x = step, y = weight, color = name)) + geom_point(alpha = 0.1) 
+  summarized_data <- current_df %>%
+    mutate(type = substr(name, 1, 5)) %>%
+    group_by(type, step) %>%
+    summarise(mean_weight = mean(weight), sd_weight = sd(weight)) 
+
+summarized_data <- summarized_data %>%
+  mutate(step_adjusted = case_when(
+    grepl("clean", type) ~ -0.03,
+    grepl("full", type) ~ 0,
+    TRUE ~ 0.03,))
+summarized_data$jittered <- summarized_data$step + summarized_data$step_adjusted
+  #summarized_data$jittered <- factor(summarized_data$jittered)
+summarized_data <- summarized_data %>%
+  mutate(day = case_when(
+    grepl("1.6", step) ~ "Monday",
+    grepl("0.3", step) ~ "Tuesday",
+    grepl("0.5", step) ~ "Wednesday",
+    grepl("0.6", step) ~ "Thursday",
+    grepl("0.8", step) ~ "Friday",
+    TRUE ~ "Saturday",
+    ))
+summarized_data$step <- as.numeric(summarized_data$step)
+# Add a small amount of jitter to the x-values
+# Define custom breaks and labels
+breaks <- c(0.1666, 0.3333, 0.5, 0.666, 0.833, 1.0)  # Custom break points
+labels <- c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")  # Labels for the breaks
+
+
+p <- ggplot(summarized_data, aes(x = jittered, y = mean_weight, color = type)) +
+  geom_point(alpha = 0.8) +
+  geom_errorbar(
+    aes(x = jittered,
+      ymin = mean_weight - sd_weight / sqrt(length(summarized_data)),
+      ymax = mean_weight + sd_weight / sqrt(length(summarized_data))
+    ) 
+  ) + theme_bw() + theme(legend.position = "bottom") + scale_x_continuous(breaks = breaks, labels = labels) + labs(
+    title = paste("Model before and after testers screening -", current_name),
+    x = "Days of the week",
+    y = "Mean weight",
+    color = "Data"
+  ) +
+  scale_color_manual(
+    values = c("full_" = "blue", "clean" = "red"),
+    labels = c("before tester screening", "after tester screening")
+  )
+
+
+  ggsave(filename = paste("plot_", current_name, ".png", sep = ""), plot = p, width = 8, height = 4)
+  #ggsave(filename = paste("scattered_", current_name, ".png", sep = ""), plot = z, width = 8, height = 4)
+  print(p)
+  
+
+}
+
+
+
+```
